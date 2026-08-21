@@ -5,9 +5,10 @@
 
 import {
   db, hasConfig, doc, getDoc, updateDoc, deleteDoc,
-  collection, getDocs, addDoc
+  collection, getDocs, addDoc, query, where
 } from "./firebase.js";
 import { requireLogin } from "./auth.js";
+import { ถามAI, มีคีย์AI } from "./ai.js";
 
 const รหัสใบลา = ค่าจากURL("id");
 const กล่องใบลา = document.getElementById("กล่องใบลา");
@@ -56,6 +57,7 @@ async function โหลดใบลา() {
     วาดความเห็น();
     กล่องความเห็น.classList.remove("hidden");
     document.getElementById("ปุ่มส่งความเห็น").addEventListener("click", ส่งความเห็น);
+    await ตั้งค่าผู้ช่วยAI();
   } catch (e) {
     กล่องใบลา.innerHTML =
       '<div class="alert alert-error">❌ อ่านข้อมูลไม่สำเร็จ — ' + esc(แปลข้อผิดพลาด(e)) + "</div>";
@@ -200,6 +202,139 @@ async function ส่งความเห็น() {
     ปุ่ม.disabled = false;
     ปุ่ม.textContent = "ส่งความเห็น";
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🤖 ผู้ช่วย AI ระดับที่ 2 — ไปอ่านข้อมูลหลายที่เองก่อน แล้วค่อยสรุป
+// ต่างจากปุ่มในหน้ายื่นใบลาใหม่ที่ส่งข้อความไปถามครั้งเดียว
+// ─────────────────────────────────────────────────────────────
+
+async function ตั้งค่าผู้ช่วยAI() {
+  const กล่องAI = document.getElementById("กล่องAI");
+  const ปุ่ม = document.getElementById("ปุ่มAIสรุป");
+
+  // ผู้ช่วยตัวนี้มีไว้ให้หัวหน้าอ่านก่อนตัดสินใจ จึงแสดงเฉพาะผู้อนุมัติและฝ่ายบุคคล
+  const เป็นผู้อนุมัติ = ผู้ใช้ปัจจุบัน.role === "manager" || ผู้ใช้ปัจจุบัน.role === "hr";
+  if (!เป็นผู้อนุมัติ) return;
+
+  กล่องAI.classList.remove("hidden");
+
+  // ถ้าเคยให้ AI สรุปไว้แล้ว ให้แสดงของเดิมทันที
+  if (ใบ.aiSuggestion) แสดงผลสรุปAI(ใบ.aiSuggestion, ใบ.aiLog);
+
+  if (!(await มีคีย์AI())) {
+    ปุ่ม.disabled = true;
+    ปุ่ม.title = "ยังไม่ได้ใส่คีย์ในไฟล์ js/config.js";
+    บอกผลAI("ยังไม่ได้ใส่คีย์ผู้ช่วย AI — พิจารณาเองได้ตามปกติ (วิธีใส่คีย์อยู่ใน SETUP.md ขั้นที่ 8)");
+    return;
+  }
+  ปุ่ม.addEventListener("click", ให้AIสรุป);
+}
+
+async function ให้AIสรุป() {
+  const ปุ่ม = document.getElementById("ปุ่มAIสรุป");
+
+  ปุ่ม.disabled = true;
+  ปุ่ม.textContent = "⏳ กำลังให้ AI อ่านข้อมูล…";
+
+  const บันทึกขั้นตอน = [];   // เก็บว่า AI ไปอ่านอะไรมาบ้าง จะได้ตรวจย้อนหลังได้
+
+  try {
+    // ขั้นที่ 1 — ใบลาใบนี้
+    บันทึกขั้นตอน.push({ step: "อ่านใบลาใบนี้", detail: ใบ.title, at: เวลาตอนนี้() });
+    บอกผลAI("ขั้นที่ 1/3 — อ่านใบลาใบนี้…");
+
+    // ขั้นที่ 2 — ประวัติการลาของผู้ขอลาคนเดียวกัน
+    บอกผลAI("ขั้นที่ 2/3 — ค้นประวัติการลาของผู้ขอลาคนนี้…");
+    const ผลค้น = await getDocs(
+      query(collection(db, "leaveRequests"), where("requesterId", "==", ใบ.requesterId))
+    );
+    const ประวัติ = ผลค้น.docs
+      .map((f) => ({ id: f.id, ...f.data() }))
+      .filter((x) => x.id !== ใบ.id);
+    บันทึกขั้นตอน.push({
+      step: "ค้นประวัติการลาของผู้ขอลา",
+      detail: "พบใบลาอื่นของคนนี้ " + ประวัติ.length + " ใบ",
+      at: เวลาตอนนี้()
+    });
+
+    // ขั้นที่ 3 — ความเห็นที่เขียนไว้แล้วในใบนี้
+    บันทึกขั้นตอน.push({
+      step: "อ่านความเห็นในโฟลเดอร์ approvals",
+      detail: "มีความเห็น " + ความเห็น.length + " รายการ",
+      at: เวลาตอนนี้()
+    });
+    บอกผลAI("ขั้นที่ 3/3 — ส่งข้อมูลทั้งหมดให้ AI สรุป…");
+
+    const ข้อมูลที่ส่งไป =
+      "ใบลาที่กำลังพิจารณา\n" +
+      "หัวข้อ: " + ใบ.title + "\n" +
+      "ประเภทการลา: " + ใบ.leaveTypeName + "\n" +
+      "วันที่ลา: " + ใบ.startDate + " ถึง " + ใบ.endDate + "\n" +
+      "เหตุผล: " + ใบ.reason + "\n\n" +
+      "ประวัติการลาที่ผ่านมาของผู้ขอลาคนนี้ (" + ประวัติ.length + " ใบ)\n" +
+      (ประวัติ.length === 0
+        ? "- ไม่มีใบลาอื่นในระบบ\n"
+        : ประวัติ.map((x) =>
+            "- " + x.startDate + " ถึง " + x.endDate + " · " + x.leaveTypeName + " · " + x.status
+          ).join("\n") + "\n") +
+      "\nความเห็นที่เขียนไว้แล้วในใบนี้ (" + ความเห็น.length + " รายการ)\n" +
+      (ความเห็น.length === 0
+        ? "- ยังไม่มีความเห็น"
+        : ความเห็น.map((c) => "- " + c.authorName + ": " + c.message).join("\n"));
+
+    const คำตอบ = await ถามAI(
+      "คุณเป็นผู้ช่วยของหัวหน้างานที่กำลังจะพิจารณาใบลา " +
+      "สรุปให้อ่านเข้าใจง่ายภายใน 4 บรรทัด เป็นภาษาไทย โดยแยกเป็นหัวข้อสั้น ๆ ดังนี้ " +
+      "1) ขอลาอะไร กี่วัน 2) ประวัติการลาที่ผ่านมาน่าสังเกตอะไรไหม " +
+      "3) ข้อควรพิจารณาก่อนตัดสินใจ " +
+      "ห้ามตัดสินใจแทน ห้ามบอกว่าให้อนุมัติหรือไม่อนุมัติ ให้เสนอข้อมูลอย่างเดียว",
+      ข้อมูลที่ส่งไป
+    );
+
+    บันทึกขั้นตอน.push({ step: "AI สรุปเสร็จ", detail: "ความยาว " + คำตอบ.length + " ตัวอักษร", at: เวลาตอนนี้() });
+
+    // เก็บผลไว้ในใบลา จะได้ไม่ต้องเรียกซ้ำ และตรวจย้อนหลังได้ว่า AI อ่านอะไรมา
+    await updateDoc(doc(db, "leaveRequests", ใบ.id), {
+      aiSuggestion: คำตอบ,
+      aiLog: บันทึกขั้นตอน
+    });
+    ใบ.aiSuggestion = คำตอบ;
+    ใบ.aiLog = บันทึกขั้นตอน;
+
+    แสดงผลสรุปAI(คำตอบ, บันทึกขั้นตอน);
+  } catch (e) {
+    // เรียกไม่สำเร็จต้องไม่ทำให้ระบบค้าง ยังกดอนุมัติหรือไม่อนุมัติเองได้ตามปกติ
+    บอกผลAI("เรียก AI ไม่สำเร็จ — " + ((e && e.message) || String(e)) +
+            " · พิจารณาเองแล้วกดอนุมัติหรือไม่อนุมัติได้ตามปกติ");
+  } finally {
+    ปุ่ม.disabled = false;
+    ปุ่ม.textContent = "ให้ AI สรุปใบลานี้ให้หัวหน้าอ่าน";
+  }
+}
+
+function แสดงผลสรุปAI(ข้อความ, ขั้นตอน) {
+  const กล่อง = document.getElementById("ผลสรุปAI");
+  กล่อง.innerHTML =
+    "<strong>🤖 ข้อเสนอจาก AI — โปรดตรวจสอบก่อนยืนยัน</strong><br>" +
+    esc(ข้อความ).replace(/\n/g, "<br>");
+  กล่อง.classList.remove("hidden");
+
+  const ที่วางขั้นตอน = document.getElementById("ขั้นตอนAI");
+  if (!Array.isArray(ขั้นตอน) || ขั้นตอน.length === 0) return;
+  ที่วางขั้นตอน.innerHTML =
+    '<p class="hint">AI ไปอ่านอะไรมาบ้าง</p>' +
+    ขั้นตอน.map((s) =>
+      '<div class="comment"><div class="meta">' + esc(s.at) + "</div><div>" +
+      esc(s.step) + " — " + esc(s.detail) + "</div></div>"
+    ).join("");
+  ที่วางขั้นตอน.classList.remove("hidden");
+}
+
+function บอกผลAI(ข้อความ) {
+  const กล่อง = document.getElementById("ผลสรุปAI");
+  กล่อง.textContent = ข้อความ;
+  กล่อง.classList.remove("hidden");
 }
 
 function แปลข้อผิดพลาด(e) {
