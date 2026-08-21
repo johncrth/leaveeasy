@@ -4,7 +4,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import {
-  db, hasConfig, doc, getDoc, updateDoc,
+  db, hasConfig, doc, getDoc, updateDoc, deleteDoc,
   collection, getDocs, addDoc
 } from "./firebase.js";
 
@@ -75,24 +75,48 @@ function วาดใบลา() {
   ).join("");
 
   // ปุ่มอนุมัติ / ไม่อนุมัติ ขึ้นเฉพาะใบที่ยังรอพิจารณา
-  if (ใบ.status === "รอพิจารณา") {
+  const ยังรอพิจารณา = ใบ.status === "รอพิจารณา";
+  if (ยังรอพิจารณา) {
     html +=
       '<div class="btn-row">' +
       '<button type="button" class="btn-ok" id="ปุ่มอนุมัติ">อนุมัติ</button>' +
       '<button type="button" class="btn-danger" id="ปุ่มไม่อนุมัติ">ไม่อนุมัติ</button>' +
+      '<button type="button" class="btn-ghost" id="ปุ่มลบ">ลบใบลานี้</button>' +
       "</div>";
   } else {
-    html += '<p class="hint">ใบนี้พิจารณาแล้ว จึงเปลี่ยนสถานะต่อไม่ได้</p>';
+    html += '<p class="hint">ใบนี้พิจารณาแล้ว จึงเปลี่ยนสถานะต่อไม่ได้ และลบไม่ได้</p>';
   }
   html += '<div id="เตือนสถานะ" class="alert alert-error hidden"></div>';
 
   กล่องใบลา.innerHTML = html;
 
-  if (ใบ.status === "รอพิจารณา") {
+  if (ยังรอพิจารณา) {
     document.getElementById("ปุ่มอนุมัติ")
       .addEventListener("click", () => เปลี่ยนสถานะ("อนุมัติ"));
     document.getElementById("ปุ่มไม่อนุมัติ")
       .addEventListener("click", () => เปลี่ยนสถานะ("ไม่อนุมัติ"));
+    document.getElementById("ปุ่มลบ").addEventListener("click", ลบใบลา);
+  }
+}
+
+// ── ลบใบลา (ตัว D ของ CRUD) ──
+// ลบได้เฉพาะใบที่สถานะยังเป็น รอพิจารณา และต้องถามยืนยันก่อนเสมอ
+async function ลบใบลา() {
+  const เตือน = document.getElementById("เตือนสถานะ");
+
+  if (ใบ.status !== "รอพิจารณา") {
+    เตือน.textContent = "⚠️ ใบที่พิจารณาแล้ว ลบไม่ได้";
+    เตือน.classList.remove("hidden");
+    return;
+  }
+  if (!confirm('ยืนยันการลบใบลา "' + ใบ.title + '" หรือไม่ · ลบแล้วกู้กลับไม่ได้')) return;
+
+  try {
+    await deleteDoc(doc(db, "leaveRequests", ใบ.id));
+    location.href = "leave-requests.html";
+  } catch (e) {
+    เตือน.textContent = "❌ ลบไม่สำเร็จ — " + แปลข้อผิดพลาด(e);
+    เตือน.classList.remove("hidden");
   }
 }
 
