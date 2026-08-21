@@ -4,9 +4,13 @@
   "private": true,
   "description": "LeaveEasy ระบบขอลาออนไลน์ — เฉลยตัวอย่างของ ADT-RAISE Batch 2 Module 2",
   "scripts": {
-    "dev": "serve -l 3000 ."
+    "dev": "serve -l 3000 .",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:report": "playwright show-report"
   },
   "devDependencies": {
+    "@playwright/test": "^1.47.0",
     "serve": "^14.2.1"
   }
 }
