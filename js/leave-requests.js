@@ -11,6 +11,14 @@
   var ใบลาที่ยื่นใหม่ = JSON.parse(sessionStorage.getItem("ใบลาที่ยื่นใหม่") || "[]");
   var ใบลาทั้งหมด = window.LEAVE_DATA.leaveRequests.concat(ใบลาที่ยื่นใหม่);
 
+  // ถ้ามาจากการกดกล่องตัวเลขบนแดชบอร์ด จะมีสถานะติดมาท้าย URL
+  var สถานะที่กรอง = ค่าจากURL("status");
+  if (สถานะที่กรอง) {
+    ใบลาทั้งหมด = ใบลาทั้งหมด.filter(function (ใบ) { return ใบ.status === สถานะที่กรอง; });
+    document.querySelector(".subtitle").textContent =
+      "กำลังแสดงเฉพาะใบลาที่สถานะ " + สถานะที่กรอง + " · กดเมนู รายการใบลา เพื่อดูทั้งหมด";
+  }
+
   แสดงตาราง(ใบลาทั้งหมด);
 
   function แสดงตาราง(รายการ) {
