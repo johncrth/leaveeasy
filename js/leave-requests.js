@@ -4,7 +4,7 @@
 // การเพิ่ม แก้ ลบ ลงฐานข้อมูล เป็นงานของสัปดาห์ที่ 7
 // ─────────────────────────────────────────────────────────────
 
-import { db, hasConfig, collection, getDocs } from "./firebase.js";
+import { db, hasConfig, collection, getDocs, query, where } from "./firebase.js";
 import { requireLogin } from "./auth.js";
 
 const กล่อง = document.getElementById("ผลลัพธ์");
@@ -29,13 +29,25 @@ async function เริ่มทำงาน() {
   const ผู้ใช้ = await requireLogin();
   if (!ผู้ใช้) return;
 
-  await โหลดจากฐานข้อมูล();
+  await โหลดจากฐานข้อมูล(ผู้ใช้);
 }
 
-// ── อ่านใบลาทั้งหมดจากโฟลเดอร์ leaveRequests บน Firestore ──
-async function โหลดจากฐานข้อมูล() {
+// ── อ่านใบลาจากโฟลเดอร์ leaveRequests บน Firestore ──
+// 🔒 ผู้ขอลาเห็นเฉพาะใบของตัวเอง · ผู้อนุมัติและฝ่ายบุคคลเห็นทุกใบ
+// ต้องถามให้ตรงกับสิทธิ์ที่มี ไม่งั้นฐานข้อมูลจะปฏิเสธทั้งคำขอ
+async function โหลดจากฐานข้อมูล(ผู้ใช้) {
+  const เห็นได้ทุกใบ = ผู้ใช้.role === "manager" || ผู้ใช้.role === "hr";
+
+  if (!เห็นได้ทุกใบ && !สถานะที่กรอง) {
+    document.querySelector(".subtitle").textContent =
+      "แสดงเฉพาะใบลาของคุณ · ผู้อนุมัติและฝ่ายบุคคลเท่านั้นที่เห็นใบลาของทุกคน";
+  }
+
   try {
-    const ผล = await getDocs(collection(db, "leaveRequests"));
+    const คำถาม = เห็นได้ทุกใบ
+      ? collection(db, "leaveRequests")
+      : query(collection(db, "leaveRequests"), where("requesterId", "==", ผู้ใช้.uid));
+    const ผล = await getDocs(คำถาม);
 
     // แปลงจากไฟล์ของ Firestore เป็นรายการธรรมดา และจดชื่อไฟล์ไว้เป็น id
     const รายการ = ผล.docs.map((ไฟล์) => ({ id: ไฟล์.id, ...ไฟล์.data() }));

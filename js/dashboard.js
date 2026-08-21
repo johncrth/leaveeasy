@@ -4,7 +4,7 @@
 // ⚠️ ตัวเลขต้องนับจากข้อมูลจริงเสมอ ห้ามพิมพ์ตัวเลขค้างไว้ในโค้ด
 // ─────────────────────────────────────────────────────────────
 
-import { db, hasConfig, collection, getDocs } from "./firebase.js";
+import { db, hasConfig, collection, getDocs, query, where } from "./firebase.js";
 import { requireLogin } from "./auth.js";
 
 const สถานะทั้งหมด = ["รอพิจารณา", "อนุมัติ", "ไม่อนุมัติ"];
@@ -23,8 +23,19 @@ async function เริ่มทำงาน() {
   if (!ผู้ใช้) return;
 
   ที่วางรายการ.innerHTML = "<p>กำลังโหลดข้อมูล…</p>";
+
+  // 🔒 ผู้ขอลานับเฉพาะใบของตัวเอง · ผู้อนุมัติและฝ่ายบุคคลนับทุกใบ
+  const เห็นได้ทุกใบ = ผู้ใช้.role === "manager" || ผู้ใช้.role === "hr";
+  if (!เห็นได้ทุกใบ) {
+    document.querySelector(".subtitle").textContent =
+      "ตัวเลขนับจากใบลาของคุณเท่านั้น · ผู้อนุมัติและฝ่ายบุคคลจะเห็นตัวเลขของทั้งระบบ";
+  }
+
   try {
-    const ผล = await getDocs(collection(db, "leaveRequests"));
+    const คำถาม = เห็นได้ทุกใบ
+      ? collection(db, "leaveRequests")
+      : query(collection(db, "leaveRequests"), where("requesterId", "==", ผู้ใช้.uid));
+    const ผล = await getDocs(คำถาม);
     const ใบลาทั้งหมด = ผล.docs.map((f) => ({ id: f.id, ...f.data() }));
     วาดตัวเลข(ใบลาทั้งหมด);
     วาดรายการล่าสุด(ใบลาทั้งหมด);

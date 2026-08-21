@@ -14,6 +14,7 @@ const กล่องเตือน = document.getElementById("เตือน�
 const ปุ่มเพิ่ม = document.getElementById("ปุ่มเพิ่ม");
 
 let รายการ = [];
+let แก้ไขได้ = false;   // ผู้อนุมัติและฝ่ายบุคคลเท่านั้นที่แก้ประเภทการลาได้
 
 เริ่มทำงาน();
 
@@ -27,6 +28,15 @@ async function เริ่มทำงาน() {
   // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
   const ผู้ใช้ = await requireLogin();
   if (!ผู้ใช้) return;
+
+  // 🔒 แก้ประเภทการลาได้เฉพาะผู้อนุมัติและฝ่ายบุคคล
+  // ปิดปุ่มไว้ให้เห็นชัด แต่ตัวที่กันจริงคือกฎใน firestore.rules ไม่ใช่หน้าจอ
+  แก้ไขได้ = ผู้ใช้.role === "manager" || ผู้ใช้.role === "hr";
+  if (!แก้ไขได้) {
+    ปุ่มเพิ่ม.disabled = true;
+    ช่องชื่อใหม่.disabled = true;
+    เตือน("บทบาทของคุณดูรายการได้อย่างเดียว · เพิ่ม แก้ ลบ ประเภทการลา ทำได้เฉพาะผู้อนุมัติและฝ่ายบุคคล");
+  }
 
   ปุ่มเพิ่ม.addEventListener("click", เพิ่มประเภท);
   await โหลดรายการ();
@@ -52,11 +62,11 @@ function วาดตาราง() {
 
   let html = "<table><thead><tr><th>ชื่อประเภทการลา</th><th>จัดการ</th></tr></thead><tbody>";
   รายการ.forEach((ประเภท) => {
-    html +=
-      "<tr><td>" + esc(ประเภท.name) + "</td><td>" +
-      '<button type="button" class="btn-ghost" data-edit="' + esc(ประเภท.id) + '">แก้ไข</button> ' +
-      '<button type="button" class="btn-danger" data-del="' + esc(ประเภท.id) + '">ลบ</button>' +
-      "</td></tr>";
+    const ปุ่ม = แก้ไขได้
+      ? '<button type="button" class="btn-ghost" data-edit="' + esc(ประเภท.id) + '">แก้ไข</button> ' +
+        '<button type="button" class="btn-danger" data-del="' + esc(ประเภท.id) + '">ลบ</button>'
+      : '<span class="hint">ดูได้อย่างเดียว</span>';
+    html += "<tr><td>" + esc(ประเภท.name) + "</td><td>" + ปุ่ม + "</td></tr>";
   });
   html += "</tbody></table>";
   ที่วางตาราง.innerHTML = html;

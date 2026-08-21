@@ -1,10 +1,13 @@
 // ─────────────────────────────────────────────────────────────
-// firestore.rules — กฎเฝ้าข้อมูลของ LeaveEasy
+// firestore.rules — กฎเฝ้าข้อมูลของ LeaveEasy (ฉบับรายห้อง สัปดาห์ที่ 8)
 //
-// 🔑 กฎขั้นต่ำของสัปดาห์ที่ 7 มีข้อเดียว: **ต้องล็อกอินก่อน ถึงจะอ่านหรือเขียนได้**
-//
-// ⚠️ กฎข้อนี้ยังไม่ใช่ปลอดภัยจริง — ใครสมัครบัญชีใหม่ก็เข้ามาอ่านได้หมด
-//    สัปดาห์ที่ 8 จะปิดรายห้องด้วยเช็กลิสต์ 5 ข้อ
+// ✅ เช็กลิสต์ 5 ข้อที่กฎชุดนี้ต้องทำให้ได้
+//   1. คนที่ไม่ล็อกอิน อ่านอะไรไม่ได้เลย
+//   2. ผู้ใช้เขียนใบลาใหม่ได้เฉพาะในชื่อตัวเอง (requesterId ต้องตรงกับ uid ของตัวเอง)
+//   3. ผู้ใช้อ่านใบลาได้เฉพาะใบของตัวเอง ยกเว้น manager และ hr ที่เห็นได้ทุกใบ
+//   4. เปลี่ยนสถานะเป็น อนุมัติ / ไม่อนุมัติ และแก้ leaveTypes ได้เฉพาะ manager และ hr
+//   5. มีกฎครอบโฟลเดอร์ย่อย approvals ด้วย เพราะกฎของแม่ไม่ครอบลูกอัตโนมัติ
+//   + ปิดท้ายด้วยกฎที่ปฏิเสธทุกอย่างที่ไม่ได้ระบุไว้
 //
 // 📌 แก้ไฟล์นี้อย่างเดียวไม่พอ ต้อง deploy ขึ้นไปด้วย:  firebase deploy
 // ─────────────────────────────────────────────────────────────
@@ -14,11 +17,117 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ทุกโฟลเดอร์และทุกโฟลเดอร์ย่อย
+    // ── ตัวช่วยอ่านง่าย ──
+
+    // ล็อกอินอยู่หรือไม่
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // uid ของคนที่ส่งคำขอมา
+    function myUid() {
+      return request.auth.uid;
+    }
+
+    // มีไฟล์ของคนนี้ในโฟลเดอร์ users แล้วหรือยัง
+    // ต้องเช็คก่อนเสมอ ไม่งั้นการไปอ่านไฟล์ที่ไม่มีอยู่จะทำให้กฎพัง
+    function hasProfile() {
+      return exists(/databases/$(database)/documents/users/$(myUid()));
+    }
+
+    // ค่าในช่อง role ของคนที่ล็อกอินอยู่
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(myUid())).data.role;
+    }
+
+    // ผู้อนุมัติ (manager) และฝ่ายบุคคล (hr) มีสิทธิ์เท่ากันในกฎชุดนี้
+    function isApprover() {
+      return isLoggedIn() && hasProfile() && (myRole() == 'manager' || myRole() == 'hr');
+    }
+
+    // เจ้าของใบลาใบนี้ใช่ตัวเราหรือไม่
+    function isOwner() {
+      return isLoggedIn() && resource.data.requesterId == myUid();
+    }
+
+
+    // ── 📁 users — ไฟล์ข้อมูลผู้ใช้ ──
+    match /users/{uid} {
+      // อ่านได้เฉพาะไฟล์ของตัวเอง · ผู้อนุมัติและฝ่ายบุคคลอ่านได้ทุกไฟล์
+      allow read: if isLoggedIn() && (uid == myUid() || isApprover());
+
+      // สมัครสมาชิกใหม่ สร้างได้เฉพาะไฟล์ของตัวเอง และต้องเป็นบทบาท employee เท่านั้น
+      allow create: if isLoggedIn() && uid == myUid()
+                    && request.resource.data.role == 'employee';
+
+      // แก้ชื่อตัวเองได้ แต่ห้ามเลื่อนบทบาทตัวเองเป็น manager
+      allow update: if isLoggedIn() && uid == myUid()
+                    && request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+
+    // ── 📁 leaveTypes — ประเภทการลา ──
+    match /leaveTypes/{typeId} {
+      // ทุกคนที่ล็อกอินต้องอ่านได้ เพราะหน้ายื่นใบลาใหม่ต้องใช้ทำรายการเลื่อนลง
+      allow read: if isLoggedIn();
+
+      // เพิ่ม แก้ ลบ ได้เฉพาะผู้อนุมัติและฝ่ายบุคคล
+      allow create, update, delete: if isApprover();
+    }
+
+
+    // ── 📁 leaveRequests — ใบขอลา ──
+    match /leaveRequests/{requestId} {
+
+      // อ่านได้เฉพาะใบของตัวเอง ยกเว้นผู้อนุมัติและฝ่ายบุคคลที่เห็นได้ทุกใบ
+      allow read: if isOwner() || isApprover();
+
+      // ยื่นใบลาใหม่ได้เฉพาะในชื่อตัวเอง และสถานะเริ่มต้นต้องเป็น รอพิจารณา เสมอ
+      allow create: if isLoggedIn()
+                    && request.resource.data.requesterId == myUid()
+                    && request.resource.data.status == 'รอพิจารณา';
+
+      allow update: if
+        // เจ้าของแก้รายละเอียดใบตัวเองได้ตอนที่ยังรอพิจารณา แต่ห้ามแก้สถานะเอง
+        (isOwner()
+          && resource.data.status == 'รอพิจารณา'
+          && request.resource.data.status == resource.data.status)
+        ||
+        // ผู้อนุมัติเปลี่ยนสถานะจาก รอพิจารณา เป็น อนุมัติ หรือ ไม่อนุมัติ ได้
+        // และบันทึกข้อเสนอจาก AI (aiSuggestion, aiLog) ได้โดยไม่เปลี่ยนสถานะ
+        (isApprover()
+          && (request.resource.data.status == resource.data.status
+              || (resource.data.status == 'รอพิจารณา'
+                  && request.resource.data.status in ['อนุมัติ', 'ไม่อนุมัติ'])));
+
+      // ลบได้เฉพาะเจ้าของ และเฉพาะใบที่ยังรอพิจารณา
+      allow delete: if isOwner() && resource.data.status == 'รอพิจารณา';
+
+
+      // ── 📁 approvals — โฟลเดอร์ย่อยของใบลาใบนี้ ──
+      // ⚠️ ต้องเขียนกฎแยก เพราะกฎของ leaveRequests ไม่ครอบโฟลเดอร์ย่อยอัตโนมัติ
+      match /approvals/{approvalId} {
+
+        // อ่านความเห็นได้เฉพาะเจ้าของใบลา และผู้อนุมัติ
+        allow read: if isApprover()
+                    || (isLoggedIn()
+                        && get(/databases/$(database)/documents/leaveRequests/$(requestId))
+                             .data.requesterId == myUid());
+
+        // เขียนความเห็นได้เฉพาะในชื่อตัวเอง
+        allow create: if isLoggedIn() && request.resource.data.authorId == myUid();
+
+        // ความเห็นที่เขียนแล้ว แก้หรือลบไม่ได้ เพื่อให้ประวัติการพิจารณาเชื่อถือได้
+        allow update, delete: if false;
+      }
+    }
+
+
+    // ── ปฏิเสธทุกอย่างที่ไม่ได้ระบุไว้ข้างบน ──
     match /{document=**} {
-      // request.auth != null แปลว่า "คนที่ส่งคำขอมา ล็อกอินอยู่"
-      // ถ้าไม่ได้ล็อกอิน ค่านี้จะเป็น null และทุกอย่างจะถูกปฏิเสธ
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }
