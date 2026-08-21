@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { db, hasConfig, doc, setDoc } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 // 📁 users — ผู้ใช้ 3 คน 3 บทบาท
 const USERS = {
@@ -114,12 +115,20 @@ const APPROVALS = {
 const ที่วางผล = document.getElementById("บันทึกผล");
 const ปุ่ม = document.getElementById("ปุ่มใส่ข้อมูล");
 
-if (!hasConfig) {
-  showConfigWarning("จึงยังใส่ข้อมูลตัวอย่างลงฐานข้อมูลไม่ได้");
-  ปุ่ม.disabled = true;
-}
+เริ่มทำงาน();
 
-ปุ่ม.addEventListener("click", ใส่ข้อมูล);
+async function เริ่มทำงาน() {
+  if (!hasConfig) {
+    showConfigWarning("จึงยังใส่ข้อมูลตัวอย่างลงฐานข้อมูลไม่ได้");
+    ปุ่ม.disabled = true;
+    return;
+  }
+  // ⏳ ต้องล็อกอินก่อน ฐานข้อมูลจึงจะยอมให้เขียน
+  const ผู้ใช้ = await requireLogin();
+  if (!ผู้ใช้) return;
+
+  ปุ่ม.addEventListener("click", ใส่ข้อมูล);
+}
 
 async function ใส่ข้อมูล() {
   ปุ่ม.disabled = true;

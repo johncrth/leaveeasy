@@ -4,14 +4,15 @@
 // ─────────────────────────────────────────────────────────────
 
 import { db, hasConfig, collection, getDocs, addDoc } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 const ฟอร์ม = document.getElementById("ฟอร์มใบลา");
 const ช่องประเภท = document.getElementById("leaveTypeId");
 const กล่องเตือน = document.getElementById("ข้อความเตือน");
 const ปุ่มบันทึก = document.getElementById("ปุ่มบันทึก");
 
-// ผู้ยื่นใบลา — สัปดาห์นี้ยังทำ CRUD ก่อน ล็อกอินตามมาทีหลัง
-let ผู้ใช้ปัจจุบัน = { uid: "u001", name: "สมชาย ใจดี" };
+// ผู้ยื่นใบลา = คนที่ล็อกอินอยู่จริง (เติมค่าตอนเริ่มทำงาน)
+let ผู้ใช้ปัจจุบัน = null;
 
 let ประเภททั้งหมด = [];
 
@@ -23,6 +24,10 @@ async function เริ่มทำงาน() {
     ปุ่มบันทึก.disabled = true;
     return;
   }
+  // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
+  ผู้ใช้ปัจจุบัน = await requireLogin();
+  if (!ผู้ใช้ปัจจุบัน) return;
+
   await โหลดประเภทการลา();
   ฟอร์ม.addEventListener("submit", บันทึกใบลา);
 }

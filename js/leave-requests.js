@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { db, hasConfig, collection, getDocs } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 const กล่อง = document.getElementById("ผลลัพธ์");
 
@@ -15,12 +16,20 @@ if (สถานะที่กรอง) {
     "กำลังแสดงเฉพาะใบลาที่สถานะ " + สถานะที่กรอง + " · กดเมนู รายการใบลา เพื่อดูทั้งหมด";
 }
 
-if (!hasConfig) {
-  // ยังไม่ได้ตั้งค่า Firebase — ขึ้นแถบเตือนสีเหลืองแทนการพังทั้งหน้า
-  showConfigWarning("หน้านี้จึงยังไม่มีใบลาให้แสดง");
-  กล่อง.innerHTML = "";
-} else {
-  โหลดจากฐานข้อมูล();
+เริ่มทำงาน();
+
+async function เริ่มทำงาน() {
+  if (!hasConfig) {
+    // ยังไม่ได้ตั้งค่า Firebase — ขึ้นแถบเตือนสีเหลืองแทนการพังทั้งหน้า
+    showConfigWarning("หน้านี้จึงยังไม่มีใบลาให้แสดง");
+    กล่อง.innerHTML = "";
+    return;
+  }
+  // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
+  const ผู้ใช้ = await requireLogin();
+  if (!ผู้ใช้) return;
+
+  await โหลดจากฐานข้อมูล();
 }
 
 // ── อ่านใบลาทั้งหมดจากโฟลเดอร์ leaveRequests บน Firestore ──

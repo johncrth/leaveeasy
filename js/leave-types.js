@@ -6,6 +6,7 @@
 import {
   db, hasConfig, collection, getDocs, addDoc, doc, updateDoc, deleteDoc
 } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 const ที่วางตาราง = document.getElementById("ตารางประเภท");
 const ช่องชื่อใหม่ = document.getElementById("ชื่อประเภทใหม่");
@@ -23,6 +24,10 @@ async function เริ่มทำงาน() {
     ที่วางตาราง.innerHTML = "";
     return;
   }
+  // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
+  const ผู้ใช้ = await requireLogin();
+  if (!ผู้ใช้) return;
+
   ปุ่มเพิ่ม.addEventListener("click", เพิ่มประเภท);
   await โหลดรายการ();
 }

@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import { db, hasConfig, collection, getDocs } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 const สถานะทั้งหมด = ["รอพิจารณา", "อนุมัติ", "ไม่อนุมัติ"];
 const กล่องตัวเลข = document.getElementById("กล่องตัวเลข");
@@ -17,6 +18,9 @@ async function เริ่มทำงาน() {
     showConfigWarning("จึงยังนับตัวเลขจากฐานข้อมูลไม่ได้");
     return;
   }
+  // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
+  const ผู้ใช้ = await requireLogin();
+  if (!ผู้ใช้) return;
 
   ที่วางรายการ.innerHTML = "<p>กำลังโหลดข้อมูล…</p>";
   try {

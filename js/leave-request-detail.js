@@ -7,13 +7,14 @@ import {
   db, hasConfig, doc, getDoc, updateDoc, deleteDoc,
   collection, getDocs, addDoc
 } from "./firebase.js";
+import { requireLogin } from "./auth.js";
 
 const รหัสใบลา = ค่าจากURL("id");
 const กล่องใบลา = document.getElementById("กล่องใบลา");
 const กล่องความเห็น = document.getElementById("กล่องความเห็น");
 
-// ผู้ที่กำลังใช้งาน — สัปดาห์นี้ทำ CRUD ก่อน ล็อกอินตามมาทีหลัง
-let ผู้ใช้ปัจจุบัน = { uid: "u002", name: "สมหญิง รักงาน" };
+// ผู้ที่กำลังใช้งาน = คนที่ล็อกอินอยู่จริง (เติมค่าตอนเริ่มทำงาน)
+let ผู้ใช้ปัจจุบัน = null;
 
 let ใบ = null;          // ข้อมูลใบลาใบนี้
 let ความเห็น = [];      // รายการในโฟลเดอร์ย่อย approvals
@@ -26,6 +27,10 @@ async function เริ่มทำงาน() {
     กล่องใบลา.innerHTML = "";
     return;
   }
+  // ⏳ ต้องรอให้รู้สถานะล็อกอินก่อน แล้วค่อยอ่านข้อมูลจากฐานข้อมูล
+  ผู้ใช้ปัจจุบัน = await requireLogin();
+  if (!ผู้ใช้ปัจจุบัน) return;
+
   if (!รหัสใบลา) {
     กล่องใบลา.innerHTML = "<p>ไม่ได้ระบุว่าจะเปิดใบไหน — กลับไปเลือกจากหน้ารายการ</p>";
     return;
