@@ -1,60 +1,90 @@
 // ─────────────────────────────────────────────────────────────
 // js/leave-requests.js — หน้าที่ 1 รายการใบลา
-// สัปดาห์ที่ 6 (ต้นสัปดาห์): อ่านจากข้อมูลปลอมใน js/data.js
+// สัปดาห์ที่ 6: อ่านข้อมูลจริงจาก Firestore แล้ว (ตัว R ของ CRUD)
+// การเพิ่ม แก้ ลบ ลงฐานข้อมูล เป็นงานของสัปดาห์ที่ 7
 // ─────────────────────────────────────────────────────────────
 
-(function () {
-  var กล่อง = document.getElementById("ผลลัพธ์");
+import { db, hasConfig, collection, getDocs } from "./firebase.js";
 
-  // ใบลาจากข้อมูลปลอม บวกกับใบที่เพิ่งยื่นในหน้าถัดไป
-  // (สัปดาห์นี้ยังไม่ต่อฐานข้อมูล ใบที่ยื่นใหม่จึงหายเมื่อปิดเบราว์เซอร์)
-  var ใบลาที่ยื่นใหม่ = JSON.parse(sessionStorage.getItem("ใบลาที่ยื่นใหม่") || "[]");
-  var ใบลาทั้งหมด = window.LEAVE_DATA.leaveRequests.concat(ใบลาที่ยื่นใหม่);
+const กล่อง = document.getElementById("ผลลัพธ์");
 
-  // ถ้ามาจากการกดกล่องตัวเลขบนแดชบอร์ด จะมีสถานะติดมาท้าย URL
-  var สถานะที่กรอง = ค่าจากURL("status");
-  if (สถานะที่กรอง) {
-    ใบลาทั้งหมด = ใบลาทั้งหมด.filter(function (ใบ) { return ใบ.status === สถานะที่กรอง; });
-    document.querySelector(".subtitle").textContent =
-      "กำลังแสดงเฉพาะใบลาที่สถานะ " + สถานะที่กรอง + " · กดเมนู รายการใบลา เพื่อดูทั้งหมด";
+// ถ้ามาจากการกดกล่องตัวเลขบนแดชบอร์ด จะมีสถานะติดมาท้าย URL
+const สถานะที่กรอง = ค่าจากURL("status");
+if (สถานะที่กรอง) {
+  document.querySelector(".subtitle").textContent =
+    "กำลังแสดงเฉพาะใบลาที่สถานะ " + สถานะที่กรอง + " · กดเมนู รายการใบลา เพื่อดูทั้งหมด";
+}
+
+if (!hasConfig) {
+  // ยังไม่ได้ตั้งค่า Firebase — แสดงข้อมูลปลอมไปก่อน พร้อมแถบเตือนสีเหลือง
+  showConfigWarning("หน้านี้จึงแสดงข้อมูลปลอมจาก js/data.js แทนข้อมูลจริง");
+  แสดงตาราง(window.LEAVE_DATA.leaveRequests);
+} else {
+  โหลดจากฐานข้อมูล();
+}
+
+// ── อ่านใบลาทั้งหมดจากโฟลเดอร์ leaveRequests บน Firestore ──
+async function โหลดจากฐานข้อมูล() {
+  try {
+    const ผล = await getDocs(collection(db, "leaveRequests"));
+
+    // แปลงจากไฟล์ของ Firestore เป็นรายการธรรมดา และจดชื่อไฟล์ไว้เป็น id
+    const รายการ = ผล.docs.map((ไฟล์) => ({ id: ไฟล์.id, ...ไฟล์.data() }));
+
+    // เรียงใหม่ไปเก่า โดยเรียงในเบราว์เซอร์ ไม่ต้องสร้าง index บน Firestore
+    รายการ.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+
+    แสดงตาราง(รายการ);
+  } catch (e) {
+    กล่อง.innerHTML =
+      '<div class="alert alert-error">❌ อ่านข้อมูลไม่สำเร็จ — ' + esc(แปลข้อผิดพลาด(e)) + "</div>";
+  }
+}
+
+function แสดงตาราง(รายการทั้งหมด) {
+  const รายการ = สถานะที่กรอง
+    ? รายการทั้งหมด.filter((ใบ) => ใบ.status === สถานะที่กรอง)
+    : รายการทั้งหมด;
+
+  if (รายการ.length === 0) {
+    กล่อง.innerHTML = "<p>ยังไม่มีใบขอลาในระบบ</p>";
+    return;
   }
 
-  แสดงตาราง(ใบลาทั้งหมด);
+  let html =
+    "<table><thead><tr>" +
+    "<th>หัวข้อ</th>" +
+    "<th>ประเภทการลา</th>" +
+    "<th>สถานะ</th>" +
+    '<th class="hide-mobile">ผู้ขอลา</th>' +
+    '<th class="hide-mobile">วันที่ลา</th>' +
+    "</tr></thead><tbody>";
 
-  function แสดงตาราง(รายการ) {
-    if (รายการ.length === 0) {
-      กล่อง.innerHTML = "<p>ยังไม่มีใบขอลาในระบบ</p>";
-      return;
-    }
+  รายการ.forEach((ใบ) => {
+    html +=
+      '<tr class="clickable" data-id="' + esc(ใบ.id) + '">' +
+      "<td>" + esc(ใบ.title) + "</td>" +
+      "<td>" + esc(ใบ.leaveTypeName) + "</td>" +
+      "<td>" + ป้ายสถานะ(ใบ.status) + "</td>" +
+      '<td class="hide-mobile">' + esc(ใบ.requesterName) + "</td>" +
+      '<td class="hide-mobile">' + esc(ใบ.startDate) + " ถึง " + esc(ใบ.endDate) + "</td>" +
+      "</tr>";
+  });
 
-    var html =
-      "<table><thead><tr>" +
-      "<th>หัวข้อ</th>" +
-      "<th>ประเภทการลา</th>" +
-      "<th>สถานะ</th>" +
-      '<th class="hide-mobile">ผู้ขอลา</th>' +
-      '<th class="hide-mobile">วันที่ลา</th>' +
-      "</tr></thead><tbody>";
+  html += "</tbody></table>";
+  กล่อง.innerHTML = html;
 
-    รายการ.forEach(function (ใบ) {
-      html +=
-        '<tr class="clickable" data-id="' + esc(ใบ.id) + '">' +
-        "<td>" + esc(ใบ.title) + "</td>" +
-        "<td>" + esc(ใบ.leaveTypeName) + "</td>" +
-        "<td>" + ป้ายสถานะ(ใบ.status) + "</td>" +
-        '<td class="hide-mobile">' + esc(ใบ.requesterName) + "</td>" +
-        '<td class="hide-mobile">' + esc(ใบ.startDate) + " ถึง " + esc(ใบ.endDate) + "</td>" +
-        "</tr>";
+  // กดที่แถวไหน ไปหน้ารายละเอียดของใบนั้น
+  กล่อง.querySelectorAll("tr.clickable").forEach((แถว) => {
+    แถว.addEventListener("click", () => {
+      location.href = "leave-request-detail.html?id=" + แถว.dataset.id;
     });
+  });
+}
 
-    html += "</tbody></table>";
-    กล่อง.innerHTML = html;
-
-    // กดที่แถวไหน ไปหน้ารายละเอียดของใบนั้น
-    กล่อง.querySelectorAll("tr.clickable").forEach(function (แถว) {
-      แถว.addEventListener("click", function () {
-        location.href = "leave-request-detail.html?id=" + แถว.dataset.id;
-      });
-    });
+function แปลข้อผิดพลาด(e) {
+  if (String(e && e.code).includes("permission-denied")) {
+    return "ฐานข้อมูลปฏิเสธการอ่าน · ตรวจว่ากฎใน firestore.rules เปิดให้อ่านหรือยัง";
   }
-})();
+  return (e && e.message) || String(e);
+}
