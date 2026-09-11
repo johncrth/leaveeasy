@@ -81,27 +81,42 @@ function วาดใบลา() {
     '<div class="field-row"><span class="k">' + r[0] + "</span><span>" + r[1] + "</span></div>"
   ).join("");
 
-  // ปุ่มอนุมัติ / ไม่อนุมัติ ขึ้นเฉพาะใบที่ยังรอพิจารณา
+  // ปุ่มอนุมัติ / ไม่อนุมัติ / ลบ ขึ้นเฉพาะใบที่ยังรอพิจารณา และต้องตรงสิทธิ์ตาม ACL.md ด้วย
+  // 🔒 อนุมัติ/ไม่อนุมัติ — เฉพาะผู้อนุมัติและฝ่ายบุคคล (เจ้าของใบเปลี่ยนสถานะใบตัวเองไม่ได้)
+  // 🔒 ลบใบลานี้ — เฉพาะเจ้าของใบเท่านั้น (ผู้อนุมัติลบใบของคนอื่นไม่ได้ แม้จะเห็นใบนั้นก็ตาม)
   const ยังรอพิจารณา = ใบ.status === "รอพิจารณา";
-  if (ยังรอพิจารณา) {
-    html +=
-      '<div class="btn-row">' +
-      '<button type="button" class="btn-ok" id="ปุ่มอนุมัติ">อนุมัติ</button>' +
-      '<button type="button" class="btn-danger" id="ปุ่มไม่อนุมัติ">ไม่อนุมัติ</button>' +
-      '<button type="button" class="btn-ghost" id="ปุ่มลบ">ลบใบลานี้</button>' +
-      "</div>";
-  } else {
+  const เป็นผู้อนุมัติ = ผู้ใช้ปัจจุบัน.role === "manager" || ผู้ใช้ปัจจุบัน.role === "hr";
+  const เป็นเจ้าของใบ = ผู้ใช้ปัจจุบัน.uid === ใบ.requesterId;
+  const แสดงปุ่มพิจารณา = ยังรอพิจารณา && เป็นผู้อนุมัติ;
+  const แสดงปุ่มลบ = ยังรอพิจารณา && เป็นเจ้าของใบ;
+
+  if (!ยังรอพิจารณา) {
     html += '<p class="hint">ใบนี้พิจารณาแล้ว จึงเปลี่ยนสถานะต่อไม่ได้ และลบไม่ได้</p>';
+  } else if (แสดงปุ่มพิจารณา || แสดงปุ่มลบ) {
+    html += '<div class="btn-row">';
+    if (แสดงปุ่มพิจารณา) {
+      html +=
+        '<button type="button" class="btn-ok" id="ปุ่มอนุมัติ">อนุมัติ</button>' +
+        '<button type="button" class="btn-danger" id="ปุ่มไม่อนุมัติ">ไม่อนุมัติ</button>';
+    }
+    if (แสดงปุ่มลบ) {
+      html += '<button type="button" class="btn-ghost" id="ปุ่มลบ">ลบใบลานี้</button>';
+    }
+    html += "</div>";
+  } else {
+    html += '<p class="hint">ใบนี้ยังรอพิจารณาอยู่ · คุณไม่มีสิทธิ์ทำอะไรกับใบนี้เพิ่มเติม</p>';
   }
   html += '<div id="เตือนสถานะ" class="alert alert-error hidden"></div>';
 
   กล่องใบลา.innerHTML = html;
 
-  if (ยังรอพิจารณา) {
+  if (แสดงปุ่มพิจารณา) {
     document.getElementById("ปุ่มอนุมัติ")
       .addEventListener("click", () => เปลี่ยนสถานะ("อนุมัติ"));
     document.getElementById("ปุ่มไม่อนุมัติ")
       .addEventListener("click", () => เปลี่ยนสถานะ("ไม่อนุมัติ"));
+  }
+  if (แสดงปุ่มลบ) {
     document.getElementById("ปุ่มลบ").addEventListener("click", ลบใบลา);
   }
 }
