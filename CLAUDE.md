@@ -145,3 +145,36 @@ Firestore ไม่มี JOIN ถ้าเก็บแต่รหัส หน
   ถ้ามีคนเปลี่ยนชื่อในโฟลเดอร์ `users` — เดือนนี้ยอมรับข้อจำกัดนี้
 - หน้าแดชบอร์ดยังนับจากใบลาที่ดึงมาทั้งหมดในครั้งเดียว ถ้าใบลาเยอะมากจะช้า
 - บทบาท `role` เปลี่ยนได้ด้วยมือใน Firebase Console เท่านั้น ยังไม่มีหน้าจอจัดการผู้ใช้
+
+---
+
+## 9. คำสั่งที่ใช้บ่อย
+
+```bash
+npm run dev              # เปิดเว็บในเครื่องที่ http://localhost:3000 (ใช้แพ็กเกจ serve)
+npm test                 # รันเทสต์ Playwright ทั้งหมด
+npx playwright test tests/security.spec.js   # รันเทสต์ไฟล์เดียว
+npm run test:headed      # รันเทสต์แบบเห็นเบราว์เซอร์จริง
+npm run test:report      # เปิดรายงานผลรอบล่าสุด
+firebase deploy          # นำขึ้น Firebase Hosting (รวม firestore.rules)
+```
+
+**ก่อนรันเทสต์ครั้งแรก** ต้องตั้งค่าตัวแปรสภาพแวดล้อม `TEST_EMAIL_A/B` `TEST_PASSWORD_A/B` `TEST_REQUEST_ID_A`
+(บัญชีทดสอบสมมติ 2 บัญชี — ห้ามใช้อีเมลจริง) รายละเอียดครบใน [tests/README.md](tests/README.md)
+ถ้าไม่ได้ตั้งค่าไว้ เทสต์จะขึ้น **skipped** ไม่ใช่ failed — เป็นไปตามที่ออกแบบไว้
+
+**ไฟล์ config ที่ต้องคัดลอกเองก่อนใช้งาน** (ถูก `.gitignore` กันไว้ ห้าม commit ของจริง)
+- `js/config.example.js` → `js/config.js` (คีย์ OpenRouter)
+- `js/firebase-config.example.js` → `js/firebase-config.js` (ค่าตั้งค่า Firebase)
+- `.firebaserc.example` → `.firebaserc` (project id ของ Firebase)
+
+---
+
+## 10. Sub-agent ที่มีในโครงงาน
+
+| Agent | ใช้เมื่อ | ทำอะไรได้ | ทำอะไรไม่ได้ |
+|---|---|---|---|
+| `reviewer` | อยากรู้ว่ามีรูรั่วหรือจุดที่ยังไม่เรียบร้อยตรงไหน | อ่านโค้ดและ `firestore.rules` แล้วรายงานเป็น 🔴🟡⚪ | ห้ามแก้โค้ดเอง — รายงานอย่างเดียว |
+| `tester` | อยากรู้ว่าระบบยังทำงานครบตามเกณฑ์การยอมรับหรือไม่ | เขียน/แก้ไฟล์ใน `tests/` และรันด้วย Playwright | ห้ามแก้โค้ดของระบบเพื่อให้เทสต์ผ่าน — พบว่าโค้ดผิดต้องรายงานกลับ ไม่ใช่แก้เอง |
+
+รายละเอียดกติกาการตรวจ/การเขียนเทสต์อยู่ในไฟล์ของแต่ละ agent (`.claude/agents/reviewer.md`, `.claude/agents/tester.md`)
