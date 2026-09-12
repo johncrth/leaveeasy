@@ -6,7 +6,8 @@
       "**/.*",
       "**/node_modules/**",
       "**/tests/**",
-      "*.md"
+      "*.md",
+      "js/config.js"
     ]
   },
   "firestore": {
