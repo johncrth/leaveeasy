@@ -6,7 +6,7 @@
 //   2. ผู้ใช้เขียนใบลาใหม่ได้เฉพาะในชื่อตัวเอง (requesterId ต้องตรงกับ uid ของตัวเอง)
 //   3. ผู้ใช้อ่านใบลาได้เฉพาะใบของตัวเอง ยกเว้น manager และ hr ที่เห็นได้ทุกใบ
 //   4. เปลี่ยนสถานะเป็น อนุมัติ / ไม่อนุมัติ และแก้ leaveTypes ได้เฉพาะ manager และ hr
-//   5. มีกฎครอบโฟลเดอร์ย่อย approvals ด้วย เพราะกฎของแม่ไม่ครอบลูกอัตโนมัติ
+//   5. มีกฎครอบโฟลเดอร์ย่อย approvals และ aiLog ด้วย เพราะกฎของแม่ไม่ครอบลูกอัตโนมัติ
 //   + ปิดท้ายด้วยกฎที่ปฏิเสธทุกอย่างที่ไม่ได้ระบุไว้
 //
 // 📌 แก้ไฟล์นี้อย่างเดียวไม่พอ ต้อง deploy ขึ้นไปด้วย:  firebase deploy
@@ -96,7 +96,7 @@ service cloud.firestore {
           && request.resource.data.status == resource.data.status)
         ||
         // ผู้อนุมัติเปลี่ยนสถานะจาก รอพิจารณา เป็น อนุมัติ หรือ ไม่อนุมัติ ได้
-        // และบันทึกข้อเสนอจาก AI (aiSuggestion, aiLog) ได้โดยไม่เปลี่ยนสถานะ
+        // และบันทึกข้อเสนอจาก AI (aiSuggestion, aiSteps) ได้โดยไม่เปลี่ยนสถานะ
         (isApprover()
           && (request.resource.data.status == resource.data.status
               || (resource.data.status == 'รอพิจารณา'
@@ -120,6 +120,18 @@ service cloud.firestore {
         allow create: if isLoggedIn() && request.resource.data.authorId == myUid();
 
         // ความเห็นที่เขียนแล้ว แก้หรือลบไม่ได้ เพื่อให้ประวัติการพิจารณาเชื่อถือได้
+        allow update, delete: if false;
+      }
+
+
+      // ── 📁 aiLog — ประวัติทุกครั้งที่เรียกผู้ช่วย AI สรุปใบลา (input/output/createdAt) ──
+      // ⚠️ ต้องเขียนกฎแยก เพราะกฎของ leaveRequests ไม่ครอบโฟลเดอร์ย่อยอัตโนมัติ
+      match /aiLog/{logId} {
+
+        // อ่าน/เขียนได้เฉพาะผู้อนุมัติและฝ่ายบุคคล เพราะผู้ช่วยตัวนี้มีไว้ให้หัวหน้าอ่านก่อนตัดสินใจเท่านั้น
+        allow read, create: if isApprover();
+
+        // บันทึกที่เขียนแล้ว แก้หรือลบไม่ได้ เพื่อให้ประวัติการเรียก AI เชื่อถือได้
         allow update, delete: if false;
       }
     }
