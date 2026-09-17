@@ -235,7 +235,7 @@ async function ตั้งค่าผู้ช่วยAI() {
   กล่องAI.classList.remove("hidden");
 
   // ถ้าเคยให้ AI สรุปไว้แล้ว ให้แสดงของเดิมทันที
-  if (ใบ.aiSuggestion) แสดงผลสรุปAI(ใบ.aiSuggestion, ใบ.aiLog);
+  if (ใบ.aiSuggestion) แสดงผลสรุปAI(ใบ.aiSuggestion, ใบ.aiSteps);
 
   if (!(await มีคีย์AI())) {
     ปุ่ม.disabled = true;
@@ -312,10 +312,17 @@ async function ให้AIสรุป() {
     // เก็บผลไว้ในใบลา จะได้ไม่ต้องเรียกซ้ำ และตรวจย้อนหลังได้ว่า AI อ่านอะไรมา
     await updateDoc(doc(db, "leaveRequests", ใบ.id), {
       aiSuggestion: คำตอบ,
-      aiLog: บันทึกขั้นตอน
+      aiSteps: บันทึกขั้นตอน
     });
     ใบ.aiSuggestion = คำตอบ;
-    ใบ.aiLog = บันทึกขั้นตอน;
+    ใบ.aiSteps = บันทึกขั้นตอน;
+
+    // 📁 leaveRequests/{id}/aiLog — เก็บทุกครั้งที่เรียก AI ไว้เป็นประวัติ (ไม่ทับของเก่า)
+    await addDoc(collection(db, "leaveRequests", ใบ.id, "aiLog"), {
+      input: ข้อมูลที่ส่งไป,
+      output: คำตอบ,
+      createdAt: เวลาตอนนี้()
+    });
 
     แสดงผลสรุปAI(คำตอบ, บันทึกขั้นตอน);
   } catch (e) {
